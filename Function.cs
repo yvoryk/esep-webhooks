@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using Amazon.Lambda.Core;
@@ -17,7 +18,7 @@ namespace EsepWebhook
         /// <param name="input"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public string FunctionHandler(object input, ILambdaContext context)
+        public object FunctionHandler(object input, ILambdaContext context)
         {
             context.Logger.LogInformation($"FunctionHandler received: {input}");
 
@@ -50,7 +51,18 @@ namespace EsepWebhook
 
             var response = client.Send(webRequest);
             using var reader = new StreamReader(response.Content.ReadAsStream());
-            return reader.ReadToEnd();
+            var slackResponse = reader.ReadToEnd();
+
+            // For API Gateway proxy integration, return proper response format
+            return new
+            {
+                statusCode = 200,
+                body = slackResponse,
+                headers = new Dictionary<string, string>
+                {
+                    { "Content-Type", "text/plain" }
+                }
+            };
         }
     }
 }
