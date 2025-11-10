@@ -12,13 +12,15 @@ namespace EsepWebhook
 {
     public class Function
     {
+        private static readonly HashSet<string> _processedDeliveries = new HashSet<string>();
+
         /// <summary>
         /// A simple function that takes a string and does a ToUpper
         /// </summary>
         /// <param name="input"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public string FunctionHandler(object input, ILambdaContext context)
+        public object FunctionHandler(object input, ILambdaContext context)
         {
             context.Logger.LogInformation($"FunctionHandler received: {input}");
 
@@ -27,11 +29,14 @@ namespace EsepWebhook
             // Try to parse as API Gateway proxy event first
             dynamic eventData = JsonConvert.DeserializeObject<dynamic>(jsonString);
             string body = null;
+            string deliveryId = null;
 
             if (eventData.body != null)
             {
                 // This is an API Gateway proxy event
                 body = eventData.body;
+                // Extract GitHub delivery ID for deduplication
+                deliveryId = eventData.headers?["X-GitHub-Delivery"];
                 context.Logger.LogInformation($"Extracted body from API Gateway event: {body}");
             }
             else
@@ -40,8 +45,54 @@ namespace EsepWebhook
                 body = jsonString;
             }
 
+            // Check for duplicate deliveries
+            if (!string.IsNullOrEmpty(deliveryId))
+            {
+                lock (_processedDeliveries)
+                {
+                    if (_processedDeliveries.Contains(deliveryId))
+                    {
+                        context.Logger.LogInformation($"Duplicate delivery ignored: {deliveryId}");
+                        return new
+                        {
+                            statusCode = 200,
+                            body = "Duplicate delivery ignored",
+                            headers = new Dictionary<string, string>
+                            {
+                                { "Content-Type", "text/plain" }
+                            }
+                        };
+                    }
+                    _processedDeliveries.Add(deliveryId);
+
+                    // Keep only last 1000 deliveries to prevent memory leak
+                    if (_processedDeliveries.Count > 1000)
+                    {
+                        // Remove oldest entry (HashSet doesn't guarantee order, so we'll clear and rebuild periodically)
+                        _processedDeliveries.Clear();
+                    }
+                }
+            }
+
             dynamic json = JsonConvert.DeserializeObject<dynamic>(body);
-            string payload = $"{{'text':'Issue Created: {json.issue.html_url}'}}";
+
+            // Check if issue exists in the payload
+            if (json?.issue?.html_url == null)
+            {
+                context.Logger.LogWarning("Payload does not contain issue.html_url");
+                return new
+                {
+                    statusCode = 400,
+                    body = "Bad Request: Payload must contain issue.html_url",
+                    headers = new Dictionary<string, string>
+                    {
+                        { "Content-Type", "text/plain" }
+                    }
+                };
+            }
+
+            string issueUrl = json.issue.html_url;
+            string payload = $"{{\"text\":\"Issue Created: {issueUrl}\"}}";
 
             var client = new HttpClient();
             var webRequest = new HttpRequestMessage(HttpMethod.Post, Environment.GetEnvironmentVariable("SLACK_URL"))
