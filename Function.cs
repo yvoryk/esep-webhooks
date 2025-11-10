@@ -20,16 +20,34 @@ namespace EsepWebhook
         public string FunctionHandler(object input, ILambdaContext context)
         {
             context.Logger.LogInformation($"FunctionHandler received: {input}");
-            
-            dynamic json = JsonConvert.DeserializeObject<dynamic>(input.ToString());
+
+            string jsonString = input.ToString();
+
+            // Try to parse as API Gateway proxy event first
+            dynamic eventData = JsonConvert.DeserializeObject<dynamic>(jsonString);
+            string body = null;
+
+            if (eventData.body != null)
+            {
+                // This is an API Gateway proxy event
+                body = eventData.body;
+                context.Logger.LogInformation($"Extracted body from API Gateway event: {body}");
+            }
+            else
+            {
+                // Direct payload
+                body = jsonString;
+            }
+
+            dynamic json = JsonConvert.DeserializeObject<dynamic>(body);
             string payload = $"{{'text':'Issue Created: {json.issue.html_url}'}}";
-            
+
             var client = new HttpClient();
             var webRequest = new HttpRequestMessage(HttpMethod.Post, Environment.GetEnvironmentVariable("SLACK_URL"))
             {
                 Content = new StringContent(payload, Encoding.UTF8, "application/json")
             };
-            
+
             var response = client.Send(webRequest);
             using var reader = new StreamReader(response.Content.ReadAsStream());
             return reader.ReadToEnd();
