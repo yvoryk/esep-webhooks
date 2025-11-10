@@ -1,0 +1,35 @@
+# Build outputs
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+
+# Package files
+*.zip
+*.msi
+
+# AWS CLI
+AWSCLIV2.msi
+dotnet-sdk-*.exe
+
+# Test files
+test-*.json
+response*.json
+output.json
+api-gateway-test.json
+postman-test-payload.json
