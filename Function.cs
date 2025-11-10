@@ -18,7 +18,7 @@ namespace EsepWebhook
         /// <param name="input"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public object FunctionHandler(object input, ILambdaContext context)
+        public string FunctionHandler(object input, ILambdaContext context)
         {
             context.Logger.LogInformation($"FunctionHandler received: {input}");
 
