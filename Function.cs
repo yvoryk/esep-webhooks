@@ -95,14 +95,29 @@ namespace EsepWebhook
             string payload = $"{{\"text\":\"Issue Created: {issueUrl}\"}}";
 
             var client = new HttpClient();
-            var webRequest = new HttpRequestMessage(HttpMethod.Post, Environment.GetEnvironmentVariable("SLACK_URL"))
-            {
-                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+            
+            // Send to multiple Slack webhooks using environment variables
+            string[] slackUrls = {
+                Environment.GetEnvironmentVariable("SLACK_URL"),
+                Environment.GetEnvironmentVariable("SLACK_URL_2")
             };
 
-            var response = client.Send(webRequest);
-            using var reader = new StreamReader(response.Content.ReadAsStream());
-            var slackResponse = reader.ReadToEnd();
+            string slackResponse = "ok";
+            foreach (var slackUrl in slackUrls)
+            {
+                if (string.IsNullOrEmpty(slackUrl)) continue;
+                
+                context.Logger.LogInformation($"Sending to Slack webhook");
+                var webRequest = new HttpRequestMessage(HttpMethod.Post, slackUrl)
+                {
+                    Content = new StringContent(payload, Encoding.UTF8, "application/json")
+                };
+
+                var response = client.Send(webRequest);
+                using var reader = new StreamReader(response.Content.ReadAsStream());
+                slackResponse = reader.ReadToEnd();
+                context.Logger.LogInformation($"Slack response: {slackResponse}");
+            }
 
             // For API Gateway proxy integration, return proper response format
             return new
